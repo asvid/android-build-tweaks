@@ -5,39 +5,43 @@ apply plugin: 'kotlin-android-extensions'
 ext.densityList = ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi', 'xxxhdpi']
 ext.abiList = ['armeabi', 'armeabi-v7a', 'x86']
 
+def buildDateTime = project.hasProperty("devBuild") ? 100 : new Date().format("yyMMddHHmm").toInteger()
+
+
 android {
     compileSdkVersion 27
     defaultConfig {
         applicationId "io.github.asvid.flavorhell"
         minSdkVersion 16
         targetSdkVersion 27
-        versionCode 1
+        versionCode buildDateTime
         versionName "1.0"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
     }
     buildTypes {
         release {
-            resValue "string", "app_name", "My App Name"
+            resValue "string", "app_name", "My App Name"  // diferent app names for diferent builds!
             minifyEnabled true
             shrinkResources true
+            multiDexEnabled true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
         debug {
             resValue "string", "app_name", "My App Name Debug"
-            applicationIdSuffix ".debug"
             debuggable true
-            ext.enableCrashlytics = false
-            ext.alwaysUpdateBuildId = false
+            multiDexEnabled true
+            ext.enableCrashlytics = false    // disable Crashlytics in debg, you have debug console for this
+            ext.alwaysUpdateBuildId = false  // disable updating build number for Crashlytics, decreases build time
         }
     }
     flavorDimensions "stage"
     productFlavors {
         dev {
             dimension "stage"
-            minSdkVersion 21
-            versionNameSuffix "-dev"
-            applicationIdSuffix '.dev'
-            resConfigs "en", "xxhdpi"
+            minSdkVersion 21            // for using new Multidex, not legacy one
+            versionNameSuffix "-dev"    // e.g 1.0-dev
+            applicationIdSuffix '.dev'  // for keeping GooglePlay production version alongside with developed
+            resConfigs("en", "xxhdpi")  // limiting used resources boosts build time
         }
 
         prod {
@@ -46,10 +50,11 @@ android {
     }
 
     variantFilter { variant ->
-        // 'development' flavor is only available for debug build
+        // 'dev' flavor is only available for debug build
         if (!variant.buildType.name.equals('debug') && variant.getFlavors().get(0).name.equals("dev")) {
             variant.setIgnore(true)
         }
+        // 'prod' flavor is only available for release build
         if (!variant.buildType.name.equals('release') && variant.getFlavors().get(0).name.equals("prod")) {
             variant.setIgnore(true)
         }
@@ -61,6 +66,7 @@ android {
 
             // Include the three architectures that we support for snowdown
             reset()
+            // use list of ABI to create APK variations
             include(*abiList)
 
             // Only enable universal build when building dogfood or release
@@ -72,13 +78,26 @@ android {
         density {
             enable true
             reset()
+            // use density list to create variations
             include(*densityList)
             compatibleScreens 'small', 'normal', 'large', 'xlarge'
         }
     }
+
+    if (project.hasProperty('devBuild')) {
+        // disable generating multiple APK for dev builds
+        splits.abi.enable = false
+        splits.density.enable = false
+        // disable PNG crunching for dev builds
+        aaptOptions.cruncherEnabled = false
+    }
+
+    dexOptions {
+        //    DO NOT USE IT
+    }
 }
 
-import com.android.build.OutputFile;
+import com.android.build.OutputFile
 
 android.applicationVariants.all { variant ->
     variant.outputs.each { output ->
@@ -91,15 +110,38 @@ android.applicationVariants.all { variant ->
     }
 }
 
+// if there is dependency conflict, it can be resolved like below
 configurations.all {
     resolutionStrategy {
         force 'com.android.support:support-v4:27.1.0'
     }
 }
 
+// Apply signing configurations, keys and other non-version-controlled things
+if (file('../internal/santa-tracker.gradle').exists()) {
+    apply from: '../internal/santa-tracker.gradle'
+}
+
+// Generate unique versionCodes for each APK variant: ZXYYSSSSS
+//   Z is the Major version number
+//   X is the Minor version number
+//   YY is the Path version number
+//   SSSS is information about the split (default to 0000)
+// Any new variations get added to the front
+android.applicationVariants.all { variant ->
+    variant.outputs.each { output ->
+        // Shift abi over by 8 digits
+        def abiFilter = output.getFilter(OutputFile.ABI)
+        int abiVersionCode = (abiList.indexOf(abiFilter) + 1)
+
+        // Merge all version codes
+        output.versionCodeOverride = variant.mergedFlavor.versionCode + abiVersionCode
+    }
+}
+
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jre7:$kotlin_version"
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
     implementation 'com.android.support:appcompat-v7:27.1.1'
     implementation 'com.android.support.constraint:constraint-layout:1.1.2'
     testImplementation 'junit:junit:4.12'
