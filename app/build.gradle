@@ -1,0 +1,108 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlin-android-extensions'
+
+ext.densityList = ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi', 'xxxhdpi']
+ext.abiList = ['armeabi', 'armeabi-v7a', 'x86']
+
+android {
+    compileSdkVersion 27
+    defaultConfig {
+        applicationId "io.github.asvid.flavorhell"
+        minSdkVersion 16
+        targetSdkVersion 27
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+    }
+    buildTypes {
+        release {
+            resValue "string", "app_name", "My App Name"
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            resValue "string", "app_name", "My App Name Debug"
+            applicationIdSuffix ".debug"
+            debuggable true
+            ext.enableCrashlytics = false
+            ext.alwaysUpdateBuildId = false
+        }
+    }
+    flavorDimensions "stage"
+    productFlavors {
+        dev {
+            dimension "stage"
+            minSdkVersion 21
+            versionNameSuffix "-dev"
+            applicationIdSuffix '.dev'
+            resConfigs "en", "xxhdpi"
+        }
+
+        prod {
+            dimension "stage"
+        }
+    }
+
+    variantFilter { variant ->
+        // 'development' flavor is only available for debug build
+        if (!variant.buildType.name.equals('debug') && variant.getFlavors().get(0).name.equals("dev")) {
+            variant.setIgnore(true)
+        }
+        if (!variant.buildType.name.equals('release') && variant.getFlavors().get(0).name.equals("prod")) {
+            variant.setIgnore(true)
+        }
+    }
+
+    splits {
+        abi {
+            enable true
+
+            // Include the three architectures that we support for snowdown
+            reset()
+            include(*abiList)
+
+            // Only enable universal build when building dogfood or release
+            def taskList = gradle.startParameter.taskNames.join(",")
+            def isRelease = taskList.contains("assembleRelease")
+            universalApk(isRelease)
+        }
+
+        density {
+            enable true
+            reset()
+            include(*densityList)
+            compatibleScreens 'small', 'normal', 'large', 'xlarge'
+        }
+    }
+}
+
+import com.android.build.OutputFile;
+
+android.applicationVariants.all { variant ->
+    variant.outputs.each { output ->
+        // Shift abi over by 8 digits
+        def abiFilter = output.getFilter(OutputFile.ABI)
+        int abiVersionCode = (abiList.indexOf(abiFilter) + 1)
+
+        // Merge all version codes
+        output.versionCodeOverride = variant.mergedFlavor.versionCode + abiVersionCode
+    }
+}
+
+configurations.all {
+    resolutionStrategy {
+        force 'com.android.support:support-v4:27.1.0'
+    }
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jre7:$kotlin_version"
+    implementation 'com.android.support:appcompat-v7:27.1.1'
+    implementation 'com.android.support.constraint:constraint-layout:1.1.2'
+    testImplementation 'junit:junit:4.12'
+    androidTestImplementation 'com.android.support.test:runner:1.0.2'
+    androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
+}
