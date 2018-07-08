@@ -7,7 +7,6 @@ ext.abiList = ['armeabi', 'armeabi-v7a', 'x86']
 
 def buildDateTime = project.hasProperty("devBuild") ? 100 : new Date().format("yyMMddHHmm").toInteger()
 
-
 android {
     compileSdkVersion 27
     defaultConfig {
@@ -17,21 +16,43 @@ android {
         versionCode buildDateTime
         versionName "1.0"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+        manifestPlaceholders = [hostName: "www.example.com"]
     }
+
+    signingConfigs {
+        config {
+            keyAlias 'key'
+            keyPassword 'qwe123'
+            storeFile file('J:/repo/FlavorHell/key.jks')
+            storePassword 'qwe123'
+        }
+    }
+
     buildTypes {
         release {
-            resValue "string", "app_name", "My App Name"  // diferent app names for diferent builds!
+            resValue "string", "app_name", "App Name"  // diferent app names for diferent builds!
+            buildConfigField "String", "FOO", '"release"'
             minifyEnabled true
             shrinkResources true
             multiDexEnabled true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.config
         }
         debug {
-            resValue "string", "app_name", "My App Name Debug"
+            resValue "string", "app_name", "App Name - Debug"
+            buildConfigField "String", "FOO", '"debug"'
+            manifestPlaceholders = [hostName: "internal.example.com"]
             debuggable true
             multiDexEnabled true
+            minifyEnabled false
             ext.enableCrashlytics = false    // disable Crashlytics in debg, you have debug console for this
             ext.alwaysUpdateBuildId = false  // disable updating build number for Crashlytics, decreases build time
+        }
+        alfa {
+            initWith release
+            resValue "string", "app_name", "App Name - Alfa"
+            buildConfigField "String", "FOO", '"alfa"'
+            applicationIdSuffix ".alfa"     // add .alfa to AppId, so it doesn't override release or debug version
         }
     }
     flavorDimensions "stage"
@@ -48,18 +69,17 @@ android {
             dimension "stage"
         }
     }
-
     variantFilter { variant ->
         // 'dev' flavor is only available for debug build
         if (!variant.buildType.name.equals('debug') && variant.getFlavors().get(0).name.equals("dev")) {
             variant.setIgnore(true)
         }
         // 'prod' flavor is only available for release build
-        if (!variant.buildType.name.equals('release') && variant.getFlavors().get(0).name.equals("prod")) {
+        if (!(variant.buildType.name.equals('release') || variant.buildType.name.equals('alfa')) &&
+            variant.getFlavors().get(0).name.equals("prod")) {
             variant.setIgnore(true)
         }
     }
-
     splits {
         abi {
             enable true
@@ -69,7 +89,7 @@ android {
             // use list of ABI to create APK variations
             include(*abiList)
 
-            // Only enable universal build when building dogfood or release
+            // Only enable universal build when building release
             def taskList = gradle.startParameter.taskNames.join(",")
             def isRelease = taskList.contains("assembleRelease")
             universalApk(isRelease)
@@ -80,10 +100,10 @@ android {
             reset()
             // use density list to create variations
             include(*densityList)
+            // Specifies a list of compatible screen size settings for the manifest.
             compatibleScreens 'small', 'normal', 'large', 'xlarge'
         }
     }
-
     if (project.hasProperty('devBuild')) {
         // disable generating multiple APK for dev builds
         splits.abi.enable = false
@@ -91,9 +111,8 @@ android {
         // disable PNG crunching for dev builds
         aaptOptions.cruncherEnabled = false
     }
-
     dexOptions {
-        //    DO NOT USE IT
+        javaMaxHeapSize = "4gb"  //    DO NOT USE IT
     }
 }
 
@@ -140,9 +159,9 @@ android.applicationVariants.all { variant ->
 }
 
 dependencies {
-    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
-    implementation 'com.android.support:appcompat-v7:27.1.1'
+    implementation 'com.android.support:appcompat-v7:+'
     implementation 'com.android.support.constraint:constraint-layout:1.1.2'
     testImplementation 'junit:junit:4.12'
     androidTestImplementation 'com.android.support.test:runner:1.0.2'
