@@ -5,140 +5,140 @@ apply plugin: 'kotlin-android-extensions'
 ext.densityList = ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi', 'xxxhdpi']
 ext.abiList = ['armeabi', 'armeabi-v7a', 'x86']
 
-def buildDateTime = project.hasProperty("devBuild") ? 100 : new Date().format("yyMMddHHmm").toInteger()
+def buildDateTime = project.hasProperty("devBuild") ? 100 :
+    new Date().format("yyMMddHHmm").toInteger()
 
 android {
-    compileSdkVersion 27
-    defaultConfig {
-        applicationId "io.github.asvid.flavorhell"
-        minSdkVersion 16
-        targetSdkVersion 27
-        versionCode buildDateTime
-        versionName "1.0"
-        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
-        manifestPlaceholders = [hostName: "www.example.com"]
+  compileSdkVersion 27
+  defaultConfig {
+    applicationId "io.github.asvid.flavorhell"
+    minSdkVersion 16
+    targetSdkVersion 27
+    versionCode buildDateTime
+    versionName "1.0"
+    testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+    manifestPlaceholders = [hostName: "www.example.com"]
+  }
+
+  signingConfigs {
+    config {}
+  }
+
+  buildTypes {
+    release {
+      resValue "string", "app_name", "App Name" // diferent app names for diferent builds!
+      buildConfigField "String", "FOO", '"release"'
+      minifyEnabled true
+      shrinkResources true
+      multiDexEnabled true
+      proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+      signingConfig signingConfigs.config
+    }
+    debug {
+      resValue "string", "app_name", "App Name - Debug"
+      buildConfigField "String", "FOO", '"debug"'
+      manifestPlaceholders = [hostName: "internal.example.com"]
+      debuggable true
+      multiDexEnabled true
+      minifyEnabled false
+      ext.enableCrashlytics = false // disable Crashlytics in debg, you have debug console for this
+      ext.alwaysUpdateBuildId = false
+      // disable updating build number for Crashlytics, decreases build time
+    }
+    alfa {
+      initWith release
+      resValue "string", "app_name", "App Name - Alfa"
+      buildConfigField "String", "FOO", '"alfa"'
+      applicationIdSuffix ".alfa"
+      // add .alfa to AppId, so it doesn't override release or debug version
+    }
+  }
+  flavorDimensions "stage"
+  productFlavors {
+    dev {
+      dimension "stage"
+      minSdkVersion 21 // for using new Multidex, not legacy one
+      versionNameSuffix "-dev" // e.g 1.0-dev
+      applicationIdSuffix '.dev'
+      // for keeping GooglePlay production version alongside with developed
+      resConfigs("en") // limiting used resources boosts build time
     }
 
-    signingConfigs {
-        config {
-            keyAlias 'key'
-            keyPassword 'qwe123'
-            storeFile file('J:/repo/FlavorHell/key.jks')
-            storePassword 'qwe123'
-        }
+    prod {
+      dimension "stage"
+    }
+  }
+  variantFilter { variant ->
+    // 'dev' flavor is only available for debug build
+    if (!variant.buildType.name.equals('debug') && variant.getFlavors().get(0).name.equals("dev")) {
+      variant.setIgnore(true)
+    }
+    // 'prod' flavor is only available for release build
+    if (!(variant.buildType.name.equals('release') || variant.buildType.name.equals('alfa')) &&
+        variant.getFlavors().get(0).name.equals("prod")) {
+      variant.setIgnore(true)
+    }
+  }
+  splits {
+    abi {
+      enable true
+
+      // Include the three architectures that we support for snowdown
+      reset()
+      // use list of ABI to create APK variations
+      include(*abiList)
+
+      // Only enable universal build when building release
+      def taskList = gradle.startParameter.taskNames.join(",")
+      def isRelease = taskList.contains("assembleRelease")
+      universalApk(isRelease)
     }
 
-    buildTypes {
-        release {
-            resValue "string", "app_name", "App Name"  // diferent app names for diferent builds!
-            buildConfigField "String", "FOO", '"release"'
-            minifyEnabled true
-            shrinkResources true
-            multiDexEnabled true
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.config
-        }
-        debug {
-            resValue "string", "app_name", "App Name - Debug"
-            buildConfigField "String", "FOO", '"debug"'
-            manifestPlaceholders = [hostName: "internal.example.com"]
-            debuggable true
-            multiDexEnabled true
-            minifyEnabled false
-            ext.enableCrashlytics = false    // disable Crashlytics in debg, you have debug console for this
-            ext.alwaysUpdateBuildId = false  // disable updating build number for Crashlytics, decreases build time
-        }
-        alfa {
-            initWith release
-            resValue "string", "app_name", "App Name - Alfa"
-            buildConfigField "String", "FOO", '"alfa"'
-            applicationIdSuffix ".alfa"     // add .alfa to AppId, so it doesn't override release or debug version
-        }
+    density {
+      enable true
+      reset()
+      // use density list to create variations
+      include(*densityList)
+      // Specifies a list of compatible screen size settings for the manifest.
+      compatibleScreens 'small', 'normal', 'large', 'xlarge'
     }
-    flavorDimensions "stage"
-    productFlavors {
-        dev {
-            dimension "stage"
-            minSdkVersion 21            // for using new Multidex, not legacy one
-            versionNameSuffix "-dev"    // e.g 1.0-dev
-            applicationIdSuffix '.dev'  // for keeping GooglePlay production version alongside with developed
-            resConfigs("en", "xxhdpi")  // limiting used resources boosts build time
-        }
-
-        prod {
-            dimension "stage"
-        }
-    }
-    variantFilter { variant ->
-        // 'dev' flavor is only available for debug build
-        if (!variant.buildType.name.equals('debug') && variant.getFlavors().get(0).name.equals("dev")) {
-            variant.setIgnore(true)
-        }
-        // 'prod' flavor is only available for release build
-        if (!(variant.buildType.name.equals('release') || variant.buildType.name.equals('alfa')) &&
-            variant.getFlavors().get(0).name.equals("prod")) {
-            variant.setIgnore(true)
-        }
-    }
-    splits {
-        abi {
-            enable true
-
-            // Include the three architectures that we support for snowdown
-            reset()
-            // use list of ABI to create APK variations
-            include(*abiList)
-
-            // Only enable universal build when building release
-            def taskList = gradle.startParameter.taskNames.join(",")
-            def isRelease = taskList.contains("assembleRelease")
-            universalApk(isRelease)
-        }
-
-        density {
-            enable true
-            reset()
-            // use density list to create variations
-            include(*densityList)
-            // Specifies a list of compatible screen size settings for the manifest.
-            compatibleScreens 'small', 'normal', 'large', 'xlarge'
-        }
-    }
-    if (project.hasProperty('devBuild')) {
-        // disable generating multiple APK for dev builds
-        splits.abi.enable = false
-        splits.density.enable = false
-        // disable PNG crunching for dev builds
-        aaptOptions.cruncherEnabled = false
-    }
-    dexOptions {
-        javaMaxHeapSize = "4gb"  //    DO NOT USE IT
-    }
+  }
+  if (project.hasProperty('devBuild')) {
+    // disable generating multiple APK for dev builds
+    splits.abi.enable = false
+    splits.density.enable = false
+    // disable PNG crunching for dev builds
+    aaptOptions.cruncherEnabled = false
+  }
+  dexOptions {
+    javaMaxHeapSize = "4gb" //    Not used anymore
+    preDexLibraries = true  //    speeds up incremental builds, can slow down clean build
+  }
 }
 
 import com.android.build.OutputFile
 
 android.applicationVariants.all { variant ->
-    variant.outputs.each { output ->
-        // Shift abi over by 8 digits
-        def abiFilter = output.getFilter(OutputFile.ABI)
-        int abiVersionCode = (abiList.indexOf(abiFilter) + 1)
+  variant.outputs.each { output ->
+    // Shift abi over by 8 digits
+    def abiFilter = output.getFilter(OutputFile.ABI)
+    int abiVersionCode = (abiList.indexOf(abiFilter) + 1)
 
-        // Merge all version codes
-        output.versionCodeOverride = variant.mergedFlavor.versionCode + abiVersionCode
-    }
+    // Merge all version codes
+    output.versionCodeOverride = variant.mergedFlavor.versionCode + abiVersionCode
+  }
 }
 
 // if there is dependency conflict, it can be resolved like below
 configurations.all {
-    resolutionStrategy {
-        force 'com.android.support:support-v4:27.1.0'
-    }
+  resolutionStrategy {
+    force 'com.android.support:support-v4:27.1.0'
+  }
 }
 
 // Apply signing configurations, keys and other non-version-controlled things
 if (file('../internal/santa-tracker.gradle').exists()) {
-    apply from: '../internal/santa-tracker.gradle'
+  apply from: '../internal/santa-tracker.gradle'
 }
 
 // Generate unique versionCodes for each APK variant: ZXYYSSSSS
@@ -148,22 +148,22 @@ if (file('../internal/santa-tracker.gradle').exists()) {
 //   SSSS is information about the split (default to 0000)
 // Any new variations get added to the front
 android.applicationVariants.all { variant ->
-    variant.outputs.each { output ->
-        // Shift abi over by 8 digits
-        def abiFilter = output.getFilter(OutputFile.ABI)
-        int abiVersionCode = (abiList.indexOf(abiFilter) + 1)
+  variant.outputs.each { output ->
+    // Shift abi over by 8 digits
+    def abiFilter = output.getFilter(OutputFile.ABI)
+    int abiVersionCode = (abiList.indexOf(abiFilter) + 1)
 
-        // Merge all version codes
-        output.versionCodeOverride = variant.mergedFlavor.versionCode + abiVersionCode
-    }
+    // Merge all version codes
+    output.versionCodeOverride = variant.mergedFlavor.versionCode + abiVersionCode
+  }
 }
 
 dependencies {
-    implementation fileTree(include: ['*.jar'], dir: 'libs')
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
-    implementation 'com.android.support:appcompat-v7:+'
-    implementation 'com.android.support.constraint:constraint-layout:1.1.2'
-    testImplementation 'junit:junit:4.12'
-    androidTestImplementation 'com.android.support.test:runner:1.0.2'
-    androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
+  implementation fileTree(include: ['*.jar'], dir: 'libs')
+  implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+  implementation 'com.android.support:appcompat-v7:27.1.1'
+  implementation 'com.android.support.constraint:constraint-layout:1.1.2'
+  testImplementation 'junit:junit:4.12'
+  androidTestImplementation 'com.android.support.test:runner:1.0.2'
+  androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
 }
