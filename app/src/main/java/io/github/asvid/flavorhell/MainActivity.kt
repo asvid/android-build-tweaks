@@ -11,6 +11,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        text.setText("$FOO")
+        text.setText("FOO: $FOO | string_val: ${resources.getString(R.string
+                .string_val)}")
     }
 }
